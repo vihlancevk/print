@@ -73,9 +73,9 @@ stop_chr:
 ;------------------------------------------------
 ; Print str on screen
 ;
-; Entry:	RSI - addr of the beginning of the string
+; Entry:	args in the stack
 ; Exit:		None
-; Destr:	RAX, RCX, RDX, RSI, RDI, RBP, RSP, R10
+; Destr:	RAX, RCX, RDX, RSI, RDI, RBP, RSP, R10, R14
 ;------------------------------------------------
 
 print:
@@ -104,10 +104,27 @@ next_specifier1:
     pop rcx
     add rsi, rcx
     mov [rbp + r13], rsi
-    mov rax, "0"
-    cmp [rsi], al
-    jne no_c_specifier1
+    mov al, [rsi]
+    sub al, 0x30
+    cmp al, 6
+    ja no_c_specifier1
 
+    cmp al, 0
+    jb no_c_specifier1
+
+    lea r14, [jump_table + rax * 8]
+    jmp r14
+
+jump_table:
+    jmp percent_C_out ; %c - 0
+    jmp percent_S_out ; %s - 1
+    jmp percent_D_out ; %d - 2
+    jmp percent_B_out ; %b - 3
+    jmp percent_O_out ; %o - 4
+    jmp percent_X_out ; %x - 5
+    jmp percent_P_out ; %% - 6
+
+percent_C_out:
     add rbp, r10
     mov rax, [rbp]
     sub rbp, r10
@@ -116,6 +133,13 @@ next_specifier1:
     sub rsi, 1
     mov [rbp + r13], rsi
     jmp no_one_specifier1
+
+percent_S_out:
+percent_D_out:
+percent_B_out:
+percent_O_out:
+percent_X_out:
+percent_P_out:
 
 no_c_specifier1:
 no_one_specifier1:
@@ -198,7 +222,7 @@ no_specifier:
 ; main
 ;------------------------------------------------
 
-%macro percent_c 1 
+%macro percent_c_in 1 
     mov r10, %1
     push r10
 %endmacro
@@ -210,12 +234,18 @@ _start:
     mov rdi, Msg
     call parser_string
 
+    ; mov rax, 0x1
+    ; mov rdi, 1
+    ; mov rsi, Msg
+    ; mov rdx, 18
+    ; syscall
+
     mov rsi, Msg
     push rsi
-    percent_c "H"
-    percent_c "W"
-    percent_c "L"
-    percent_c "!"
+    percent_c_in "H"
+    percent_c_in "W"
+    percent_c_in "L"
+    percent_c_in "!"
     push r12
     call print
     mov rcx, 5
