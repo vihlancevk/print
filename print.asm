@@ -3,88 +3,9 @@
 
 section .data
 
-Msg: db "Hello, %cor%cd!", 0x0a
+Msg: db "%cello, %cor%cd!", 0x0a
 
 section .text
-
-global _start
-
-_start:
-
-    mov r10, "o"
-    push r10
-    mov r10, "k"
-    push r10
-    mov rsi, Msg
-    push rsi
-    call print
-            
-    mov rax, 0x3C
-    xor rdi, rdi
-    syscall
-
-;------------------------------------------------
-; Print str on screen
-;
-; Entry:	RSI - addr of the beginning of the string
-; Exit:		
-; Destr:	RAX, RCX, RDX, RSI, RDI, RBP, RSP, R10
-;------------------------------------------------
-
-print:
-
-    push rbp
-	mov rbp, rsp
-
-    mov r10, 24     ; 24 = 3 * 8
-
-next_specifier:
-    mov rsi, [rbp + 16]     ; 16 = 2 * 8
-    mov rax, "%"
-    call strchr
-    cmp rcx, 0
-    je no_specifier
-
-    push rcx
-    mov rax, 0x1
-    mov rdi, 1
-    mov rsi, [rbp + 16]
-    mov rdx, rcx
-    dec rdx
-    syscall     ; registers rcx and r11 will be destroyed
-    pop rcx
-    add rsi, rcx
-    mov [rbp + 16], rsi
-    mov rax, "c"
-    cmp [rsi], al
-    jne no_c_specifier
-
-    ; ToDo
-    add rbp, r10
-    mov rax, [rbp]
-    sub rbp, r10
-    add r10, 8
-    mov [rsi], al
-    sub rsi, 1
-    mov [rbp + 16], rsi
-
-no_c_specifier:
-    add rsi, 1
-    mov [rbp + 16], rsi
-    jmp next_specifier
-    
-no_specifier:
-    mov rsi, [rbp + 16]
-    call strlen
-    mov rdx, rcx
-    mov rsi, [rbp + 16]
-    mov rdi, 1
-    mov rax, 0x1
-    syscall
-
-    pop rbp
-
-    ret 3 * 4
 
 ;------------------------------------------------
 ; String length counting function
@@ -147,4 +68,98 @@ next_chr:
         
 stop_chr:
         
-	ret      
+	ret
+
+;------------------------------------------------
+; Print str on screen
+;
+; Entry:	RSI - addr of the beginning of the string
+; Exit:		None
+; Destr:	RAX, RCX, RDX, RSI, RDI, RBP, RSP, R10
+;------------------------------------------------
+
+print:
+
+    push rbp
+	mov rbp, rsp
+
+    mov r10, [rbp + 16]     ; r10 = r12
+    mov r13, [rbp + 16]     ; r13 = r12
+    add r13, 8
+
+next_specifier:
+    mov rsi, [rbp + r13]
+    mov rax, "%"
+    call strchr
+    cmp rcx, 0
+    je no_specifier
+
+    push rcx
+    mov rax, 0x1
+    mov rdi, 1
+    mov rsi, [rbp + r13]
+    mov rdx, rcx
+    dec rdx
+    syscall     ; registers rcx and r11 will be destroyed
+    pop rcx
+    add rsi, rcx
+    mov [rbp + r13], rsi
+    mov rax, "c"
+    cmp [rsi], al
+    jne no_c_specifier
+
+    ; ToDo
+    add rbp, r10
+    mov rax, [rbp]
+    sub rbp, r10
+    sub r10, 8
+    mov [rsi], al
+    sub rsi, 1
+    mov [rbp + r13], rsi
+
+no_c_specifier:
+    add rsi, 1
+    mov [rbp + r13], rsi
+    jmp next_specifier
+    
+no_specifier:
+    mov rsi, [rbp + r13]
+    call strlen
+    mov rdx, rcx
+    mov rsi, [rbp + r13]
+    mov rdi, 1
+    mov rax, 0x1
+    syscall
+
+    pop rbp
+
+    ret
+
+global _start
+
+_start:
+
+    xor r12, r12
+
+    mov rsi, Msg
+    push rsi
+    add r12, 8
+    mov r10, "L"
+    push r10
+    add r12, 8
+    mov r10, "k"
+    push r10
+    add r12, 8
+    mov r10, "o"
+    push r10
+    add r12, 16
+    push r12
+    call print
+    mov rcx, 5
+lp1:
+    pop r10    
+    loop lp1
+
+    mov rax, 0x3C
+    xor rdi, rdi
+    syscall      
