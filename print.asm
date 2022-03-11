@@ -3,7 +3,7 @@
 
 section .data
 
-Msg: db "%cello, %cor%cd!", 0x0a
+Msg: db "%cello, %cor%cd%c", 0x0a
 
 section .text
 
@@ -87,12 +87,12 @@ print:
     mov r13, [rbp + 16]     ; r13 = r12
     add r13, 8
 
-next_specifier:
+next_specifier1:
     mov rsi, [rbp + r13]
     mov rax, "%"
     call strchr
     cmp rcx, 0
-    je no_specifier
+    je no_specifier1
 
     push rcx
     mov rax, 0x1
@@ -104,11 +104,10 @@ next_specifier:
     pop rcx
     add rsi, rcx
     mov [rbp + r13], rsi
-    mov rax, "c"
+    mov rax, "0"
     cmp [rsi], al
-    jne no_c_specifier
+    jne no_c_specifier1
 
-    ; ToDo
     add rbp, r10
     mov rax, [rbp]
     sub rbp, r10
@@ -116,13 +115,15 @@ next_specifier:
     mov [rsi], al
     sub rsi, 1
     mov [rbp + r13], rsi
+    jmp no_one_specifier1
 
-no_c_specifier:
+no_c_specifier1:
+no_one_specifier1:
     add rsi, 1
     mov [rbp + r13], rsi
-    jmp next_specifier
+    jmp next_specifier1
     
-no_specifier:
+no_specifier1:
     mov rsi, [rbp + r13]
     call strlen
     mov rdx, rcx
@@ -135,24 +136,86 @@ no_specifier:
 
     ret
 
+;------------------------------------------------
+; Preparing a string for the print function
+;
+; Entry:	RDI - addr of the beginning of the string
+; Exit:		R12 - the number of elements in the stack for the print function
+; Note:     c - 0, s - 1, d - 2, b - 3, o - 4, x - 5, % - 6
+; Destr:	RAX, RCX, RSI, RDI, R12
+;------------------------------------------------
+
+%macro check_sym 3 
+    mov rax, %2
+    cmp [rdi], al
+    jne no_%1_specifier
+
+    mov rax, %3
+    mov [rdi], al
+    jmp no_one_specifier
+
+no_%1_specifier:
+%endmacro
+
+parser_string:
+
+    xor r12, r12
+
+next_specifier:
+    mov rsi, rdi
+    mov rax, "%"
+    call strchr
+    cmp rcx, 0
+    je no_specifier
+
+    add rdi, rcx
+    add r12, 8
+    check_sym c, "c", "0"
+    check_sym s, "s", "1"
+    check_sym d, "d", "2"
+    check_sym b, "b", "3"
+    check_sym o, "o", "4"
+    check_sym x, "x", "5"
+    mov rax, "%"        ; check_sym %, "%", 6
+    cmp [rdi], al
+    jne no_percent_specifier
+
+    mov rax, "6"
+    mov [rdi], al
+    sub r12, 8
+    jmp no_one_specifier
+
+no_percent_specifier:
+no_one_specifier:
+    add rdi, 1
+    jmp next_specifier
+
+no_specifier:
+    add r12, 16
+    ret
+
+;------------------------------------------------
+; main
+;------------------------------------------------
+
+%macro percent_c 1 
+    mov r10, %1
+    push r10
+%endmacro
+
 global _start
 
 _start:
 
-    xor r12, r12
+    mov rdi, Msg
+    call parser_string
 
     mov rsi, Msg
     push rsi
-    add r12, 8
-    mov r10, "L"
-    push r10
-    add r12, 8
-    mov r10, "k"
-    push r10
-    add r12, 8
-    mov r10, "o"
-    push r10
-    add r12, 16
+    percent_c "H"
+    percent_c "W"
+    percent_c "L"
+    percent_c "!"
     push r12
     call print
     mov rcx, 5
