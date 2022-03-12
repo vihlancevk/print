@@ -92,6 +92,7 @@ my_strchr:
 ; Entry:	- RSI - the address of string for output answer
 ;           - RAX - the number
 ;           - RBX - the base of the number system
+;                   (numbers that are not a power of two)
 ;
 ; Note:	    - $ - 24h (ASCII code)
 ;       	- the number cannot start with 0
@@ -145,29 +146,32 @@ my_itoa_no_binary:
 
 %macro percent_num_out 1
 
-    mov rsi, NUM         ;
-    mov rax, [rbp + r10] ; preparing arguments for itoa
-    sub r10, 8           ; (rsi, rax, rbx)
-    mov rbx, %1          ;
-    call my_itoa_no_binary
-    mov rsi, NUM ; preparing arguments for my_strlen
-    call my_strlen
-    mov rax, 0x1 ;
-    mov rdi, 1   ; output of the NUM string
+    mov rsi, NUM           ;
+    mov rax, [rbp + r10]   ; preparing arguments for itoa
+    sub r10, 8             ; (rsi, rax, rbx)
+    mov rbx, %1            ;
+    call my_itoa_no_binary ;
+
+    mov rsi, NUM   ; preparing arguments for my_strlen
+    call my_strlen ;
+
+    mov rax, 0x1 ; output of the NUM string
+    mov rdi, 1   ;
     mov rsi, NUM ;
     mov rdx, rcx ; (rdx = length of the string NUM)
     syscall      ;
+
     mov rsi, [rbp + r13] ; rsi = the address of the original line to output
 
 %endmacro
 
 my_printf:
 
-    push rbp
-	mov rbp, rsp
+    push rbp     ; prolog
+	mov rbp, rsp ;
 
-    mov r10, [rbp + 16]     ; r10 = r12
-    mov r13, [rbp + 16]     ; r13 = r12
+    mov r10, [rbp + 16] ; r10 = r12
+    mov r13, [rbp + 16] ; r13 = r12
     add r13, 8
 
 .next_specifier:
@@ -178,40 +182,47 @@ my_printf:
     je .no_one_specifier
 
     push rcx
-    mov rax, 0x1
-    mov rdi, 1
-    mov rsi, [rbp + r13]
-    mov rdx, rcx
-    dec rdx
-    syscall     ; registers rcx and r11 will be destroyed
-    pop rcx
-    add rsi, rcx
-    mov [rbp + r13], rsi
-    mov al, [rsi]
-    sub al, 0x30
 
-    lea r14, [jump_table + rax * 8]
-    jmp [r14]
+    mov rax, 0x1         ;
+    mov rdi, 1           ; output of the string up to %
+    mov rsi, [rbp + r13] ;
+    mov rdx, rcx         ;
+    dec rdx              ;
+    syscall              ; (registers rcx and r11 will be destroyed)
+    
+    pop rcx
+    
+    add rsi, rcx         ; changing the address of the beginning of the string
+    mov [rbp + r13], rsi ;
+
+    mov al, [rsi] ; al = one of nimbers 0 ... 6
+    sub al, 0x30  ;
+
+    lea r14, [jump_table + rax * 8] ; interaction with the jump table
+    jmp [r14]                       ;
 
 ..@percent_C_out:
-    mov rax, [rbp + r10]
-    sub r10, 8
-    mov [rsi], al
-    sub rsi, 1
-    mov [rbp + r13], rsi
+    mov rax, [rbp + r10] ; replacing the %c specifier with the character
+    sub r10, 8           ;
+    mov [rsi], al        ;
+
+    sub rsi, 1           ; changing the address of the beginning of the string
+    mov [rbp + r13], rsi ;
+
     jmp .default
 
 ..@percent_S_out:
-    mov rax, 0x1
-    mov rdi, 1
-    mov rsi, [rbp + r10]
-    sub r10, 8
-    mov rdx, [rbp + r10]
-    sub r10, 8
-    syscall
-    mov rsi, [rbp + r13]
-    jmp .default
+    mov rax, 0x1         ; output of the string that is marked with the %s specifier
+    mov rdi, 1           ;
+    mov rsi, [rbp + r10] ;
+    sub r10, 8           ;
+    mov rdx, [rbp + r10] ;
+    sub r10, 8           ;
+    syscall              ;
 
+    mov rsi, [rbp + r13] ; changing the address of the beginning of the string
+
+    jmp .default
 
 ..@percent_D_out:
     percent_num_out 10
@@ -230,37 +241,40 @@ my_printf:
     jmp .default
 
 ..@percent_P_out:
-    mov rsi, [rbp + r13]
-    mov rax, "%"
-    mov [rsi], al
-    mov rax, 0x1
-    mov rdi, 1
-    mov rdx, 1
-    syscall
+    mov rsi, [rbp + r13] ; replacing the %c specifier with the character
+    mov rax, "%"         ;
+    mov [rsi], al        ;
+
+    mov rax, 0x1 ; output %
+    mov rdi, 1   ;
+    mov rdx, 1   ;
+    syscall      ;
+
     jmp .default
 
 .default:
-    add rsi, 1
-    mov [rbp + r13], rsi
+    add rsi, 1           ; changing the address of the beginning of the string
+    mov [rbp + r13], rsi ;
+
     jmp .next_specifier
     
 .no_one_specifier:
-    mov rsi, [rbp + r13]
-    call my_strlen
-    mov rdx, rcx
-    mov rsi, [rbp + r13]
-    mov rdi, 1
-    mov rax, 0x1
-    syscall
+    mov rsi, [rbp + r13] ; output of the part of the string in which there are no specifiers left
+    call my_strlen       ;
+    mov rdx, rcx         ;
+    mov rsi, [rbp + r13] ;
+    mov rdi, 1           ;
+    mov rax, 0x1         ;
+    syscall              ;
 
-    pop rbp
-    ret
+    pop rbp ;  epilogue
+    ret     ;
 
 ;------------------------------------------------
 ; Preparing the string for the my_printf function
 ;
 ; Entry:	RDI - the address of the beginning of the string
-; Exit:		R12 - the number of elements in the stack for the my_printf function
+; Exit:		R12 - the number * 8 of elements in the stack for the my_printf function
 ; Note:     c - 0, s - 1, d - 2, b - 3, o - 4, x - 5, % - 6
 ; Destr:	RAX, RCX, RSI, RDI, R12
 ;------------------------------------------------
@@ -296,6 +310,7 @@ parser_string:
     check_sym b, "b", "3"
     check_sym o, "o", "4"
     check_sym x, "x", "5"
+
     mov rax, "%"        ; check_sym %, "%", 6
     cmp [rdi], al
     jne .wrong_specifier
@@ -306,11 +321,12 @@ parser_string:
     jmp .no_specifier
 
 .wrong_specifier:
-    mov rax, 0x1
-    mov rdi, 1
-    mov rsi, ERROR
-    mov rdx, ERROR_LEN
-    syscall
+    mov rax, 0x1       ; error message output
+    mov rdi, 1         ;
+    mov rsi, ERROR     ;
+    mov rdx, ERROR_LEN ;
+    syscall            ;
+
     xor r12, r12
     ret
 
@@ -344,9 +360,9 @@ global _start
 
 _start:
 
-    mov rdi, MSG
-    call parser_string
-    cmp r12, 0
+    mov rdi, MSG       ; preparing a string for the my_printf function
+    call parser_string ;
+    cmp r12, 0         ;
     je .return
 
     mov rsi, MSG
@@ -362,13 +378,13 @@ _start:
     percent_sym_or_num_in 10
     push r12
     call my_printf
-    mov rcx, r12
-.lp:
-    pop r10
-    sub rcx, 7    
-    loop .lp
+    mov rcx, r12 ; clearing the stack after calling the my_printf function
+.lp:             ;
+    pop r10      ;
+    sub rcx, 7   ;
+    loop .lp     ;
 
 .return:
-    mov rax, 0x3C
-    xor rdi, rdi
-    syscall
+    mov rax, 0x3C ; completion of the program
+    xor rdi, rdi  ;
+    syscall       ;
