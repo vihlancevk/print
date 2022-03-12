@@ -140,26 +140,32 @@ percent_C_out:
     jmp _default_
 
 percent_S_out:
+    mov rax, 0x1
+    mov rdi, 1
     add rbp, r10
-    mov rsi, [rbp]
-    call strlen
-    mov rdx, rcx
     mov rsi, [rbp]
     sub rbp, r10
     sub r10, 8
-    mov rdi, 1
-    mov rax, 0x1
+    add rbp, r10
+    mov rdx, [rbp]
+    sub rbp, r10
+    sub r10, 8
+    syscall
+    mov rsi, [rbp + r13]
     jmp _default_
 
 
 percent_D_out:
-
+    ; ToDo
+    jmp _default_
 
 percent_B_out:
-
+    ; ToDo
+    jmp _default_
 
 percent_O_out:
-
+    ; ToDo
+    jmp _default_
 
 percent_X_out:
     ; ToDo
@@ -262,10 +268,20 @@ no_one_specifier:
 ; main
 ;------------------------------------------------
 
-%macro percent_specifier_in 1 
+%macro percent_c_in 1
     mov r10, %1
     push r10
 %endmacro
+
+%macro percent_s_in 1
+    mov r10, STR%1
+    push r10
+    mov rsi, STR%1
+    call strlen
+    push rcx
+    add r12, 8
+%endmacro
+
 
 global _start
 
@@ -286,11 +302,11 @@ _start:
 
     mov rsi, MSG
     push rsi
-    percent_specifier_in "H"
-    percent_specifier_in "W"
-    percent_specifier_in "L"
-    percent_specifier_in "!"
-    percent_specifier_in STR1
+    percent_c_in "H"
+    percent_c_in "W"
+    percent_c_in "L"
+    percent_c_in "!"
+    percent_s_in 1
     push r12
     call print
     mov rcx, 5
