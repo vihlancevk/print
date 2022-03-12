@@ -1,6 +1,6 @@
-; nasm -f elf64 -g -l print.lst print.asm
-; ld -o print print.o
-; ./print
+; nasm -f elf64 -g -l printf.lst printf.asm
+; ld -o printf printf.o
+; ./printf
 
 section .rodata align = 8
 
@@ -143,7 +143,7 @@ stop_itoa:
     ret
 
 ;------------------------------------------------
-; Print str on screen
+; Printf str on screen
 ;
 ; Entry:	args in the stack
 ; Exit:		None
@@ -170,7 +170,7 @@ stop_itoa:
 
 %endmacro
 
-print:
+printf:
 
     push rbp
 	mov rbp, rsp
@@ -272,10 +272,10 @@ _no_one_specifier_:
     ret
 
 ;------------------------------------------------
-; Preparing a string for the print function
+; Preparing a string for the printf function
 ;
 ; Entry:	RDI - addr of the beginning of the string
-; Exit:		R12 - the number of elements in the stack for the print function
+; Exit:		R12 - the number of elements in the stack for the printf function
 ; Note:     c - 0, s - 1, d - 2, b - 3, o - 4, x - 5, % - 6
 ; Destr:	RAX, RCX, RSI, RDI, R12
 ;------------------------------------------------
@@ -376,7 +376,7 @@ _start:
     percent_sym_or_num_in 10
     percent_sym_or_num_in 10
     push r12
-    call print
+    call printf
 debug:    mov rcx, r12
 lp1:
     pop r10
