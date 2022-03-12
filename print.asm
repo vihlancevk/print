@@ -2,13 +2,25 @@
 ; ld -o print print.o
 ; ./print
 
+section .rodata align = 8
+
+jump_table:
+    .L1 dq percent_C_out ; %c - 0
+    .L2 dq percent_S_out ; %s - 1
+    .L3 dq percent_D_out ; %d - 2
+    .L4 dq percent_B_out ; %b - 3
+    .L5 dq percent_O_out ; %o - 4
+    .L6 dq percent_X_out ; %x - 5
+    .L7 dq percent_P_out ; %% - 6
+
 section .data
 
 ERROR: db "Wrong format input string!", 0x0a
 ERROR_LEN equ $ - ERROR
 
-MSG: db "%cel%%lo, %cor%cd%c %%", 0x0a, "$"
-MSG_LEN equ $ - MSG
+MSG: db "%cello, %% %cor%cd%c %s", 0x0a, "$"
+
+STR1: db "My name is Kostya!$"
 
 section .text
 
@@ -115,18 +127,7 @@ _next_specifier_:
     sub al, 0x30
 
     lea r14, [jump_table + rax * 8]
-    jmp r14
-
-align 8
-
-jump_table:
-    jmp percent_C_out ; %c - 0
-    jmp percent_S_out ; %s - 1
-    jmp percent_D_out ; %d - 2
-    jmp percent_B_out ; %b - 3
-    jmp percent_O_out ; %o - 4
-    jmp percent_X_out ; %x - 5
-    jmp percent_P_out ; %% - 6
+    jmp [r14]
 
 percent_C_out:
     add rbp, r10
@@ -139,7 +140,17 @@ percent_C_out:
     jmp _default_
 
 percent_S_out:
-    
+    add rbp, r10
+    mov rsi, [rbp]
+    call strlen
+    mov rdx, rcx
+    mov rsi, [rbp]
+    sub rbp, r10
+    sub r10, 8
+    mov rdi, 1
+    mov rax, 0x1
+    jmp _default_
+
 
 percent_D_out:
 
@@ -149,7 +160,7 @@ percent_B_out:
 
 percent_O_out:
 
-    
+
 percent_X_out:
     ; ToDo
     jmp _default_
@@ -251,7 +262,7 @@ no_one_specifier:
 ; main
 ;------------------------------------------------
 
-%macro percent_c_in 1 
+%macro percent_specifier_in 1 
     mov r10, %1
     push r10
 %endmacro
@@ -275,16 +286,25 @@ _start:
 
     mov rsi, MSG
     push rsi
-    percent_c_in "H"
-    percent_c_in "W"
-    percent_c_in "L"
-    percent_c_in "!"
+    percent_specifier_in "H"
+    percent_specifier_in "W"
+    percent_specifier_in "L"
+    percent_specifier_in "!"
+    percent_specifier_in STR1
     push r12
     call print
     mov rcx, 5
 lp1:
     pop r10    
     loop lp1
+
+    ; mov r8, jump_table.L1
+    ; mov r9, jump_table.L2
+    ; mov r10, jump_table.L3
+    ; mov r11, jump_table.L4
+    ; mov r12, jump_table.L5
+    ; mov r13, jump_table.L6
+    ; mov r14, jump_table.L7
 
 return:
     mov rax, 0x3C
