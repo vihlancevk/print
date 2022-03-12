@@ -63,7 +63,7 @@ my_strlen:
 ; Destr:	RBX, RCX, RSI
 ;------------------------------------------------
 
-strchr:
+my_strchr:
 
     mov rcx, 1
     mov rbx, 0x24
@@ -100,7 +100,7 @@ strchr:
 ; Destr:	RAX, RBX, RCX, RDX, RSI
 ;------------------------------------------------
 
-itoa:
+my_itoa_no_binary:
     
 	mov rcx, 0
 .next_itoa:
@@ -149,7 +149,7 @@ itoa:
     mov rax, [rbp + r10] ; preparing arguments for itoa
     sub r10, 8           ; (rsi, rax, rbx)
     mov rbx, %1          ;
-    call itoa
+    call my_itoa_no_binary
     mov rsi, NUM ; preparing arguments for my_strlen
     call my_strlen
     mov rax, 0x1 ;
@@ -161,7 +161,7 @@ itoa:
 
 %endmacro
 
-printf:
+my_printf:
 
     push rbp
 	mov rbp, rsp
@@ -173,7 +173,7 @@ printf:
 .next_specifier:
     mov rsi, [rbp + r13]
     mov rax, "%"
-    call strchr
+    call my_strchr
     cmp rcx, 0
     je .no_one_specifier
 
@@ -257,10 +257,10 @@ printf:
     ret
 
 ;------------------------------------------------
-; Preparing the string for the printf function
+; Preparing the string for the my_printf function
 ;
 ; Entry:	RDI - the address of the beginning of the string
-; Exit:		R12 - the number of elements in the stack for the printf function
+; Exit:		R12 - the number of elements in the stack for the my_printf function
 ; Note:     c - 0, s - 1, d - 2, b - 3, o - 4, x - 5, % - 6
 ; Destr:	RAX, RCX, RSI, RDI, R12
 ;------------------------------------------------
@@ -284,7 +284,7 @@ parser_string:
 .next_specifier:
     mov rsi, rdi
     mov rax, "%"
-    call strchr
+    call my_strchr
     cmp rcx, 0
     je .no_one_specifier
 
@@ -361,7 +361,7 @@ _start:
     percent_sym_or_num_in 10
     percent_sym_or_num_in 10
     push r12
-    call printf
+    call my_printf
     mov rcx, r12
 .lp:
     pop r10
