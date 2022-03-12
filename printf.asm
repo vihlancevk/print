@@ -137,144 +137,11 @@ my_itoa_no_binary:
     ret
 
 ;------------------------------------------------
-; Printf the string on the screen
-;
-; Entry:	args in the stack
-; Exit:		none
-; Destr:	RAX, RCX, RDX, RSI, RDI, RBP, RSP, R10, R14
-;------------------------------------------------
-
-%macro percent_num_out 1
-
-    mov rsi, NUM           ;
-    mov rax, [rbp + r10]   ; preparing arguments for itoa
-    sub r10, 8             ; (rsi, rax, rbx)
-    mov rbx, %1            ;
-    call my_itoa_no_binary ;
-
-    mov rsi, NUM   ; preparing arguments for my_strlen
-    call my_strlen ;
-
-    mov rax, 0x1 ; output of the NUM string
-    mov rdi, 1   ;
-    mov rsi, NUM ;
-    mov rdx, rcx ; (rdx = length of the string NUM)
-    syscall      ;
-
-    mov rsi, [rbp + r13] ; rsi = the address of the original line to output
-
-%endmacro
-
-my_printf:
-
-    push rbp     ; prolog
-	mov rbp, rsp ;
-
-    mov r10, [rbp + 16] ; r10 = r12
-    mov r13, [rbp + 16] ; r13 = r12
-    add r13, 8
-
-.next_specifier:
-    mov rsi, [rbp + r13]
-    mov rax, "%"
-    call my_strchr
-    cmp rcx, 0
-    je .no_one_specifier
-
-    push rcx
-
-    mov rax, 0x1         ;
-    mov rdi, 1           ; output of the string up to %
-    mov rsi, [rbp + r13] ;
-    mov rdx, rcx         ;
-    dec rdx              ;
-    syscall              ; (registers rcx and r11 will be destroyed)
-    
-    pop rcx
-    
-    add rsi, rcx         ; changing the address of the beginning of the string
-    mov [rbp + r13], rsi ;
-
-    mov al, [rsi] ; al = one of nimbers 0 ... 6
-    sub al, 0x30  ;
-
-    lea r14, [jump_table + rax * 8] ; interaction with the jump table
-    jmp [r14]                       ;
-
-..@percent_C_out:
-    mov rax, [rbp + r10] ; replacing the %c specifier with the character
-    sub r10, 8           ;
-    mov [rsi], al        ;
-
-    sub rsi, 1           ; changing the address of the beginning of the string
-    mov [rbp + r13], rsi ;
-
-    jmp .default
-
-..@percent_S_out:
-    mov rax, 0x1         ; output of the string that is marked with the %s specifier
-    mov rdi, 1           ;
-    mov rsi, [rbp + r10] ;
-    sub r10, 8           ;
-    mov rdx, [rbp + r10] ;
-    sub r10, 8           ;
-    syscall              ;
-
-    mov rsi, [rbp + r13] ; changing the address of the beginning of the string
-
-    jmp .default
-
-..@percent_D_out:
-    percent_num_out 10
-    jmp .default
-
-..@percent_B_out:
-    percent_num_out 2
-    jmp .default
-
-..@percent_O_out:
-    percent_num_out 8
-    jmp .default
-
-..@percent_X_out:
-    percent_num_out 16
-    jmp .default
-
-..@percent_P_out:
-    mov rsi, [rbp + r13] ; replacing the %c specifier with the character
-    mov rax, "%"         ;
-    mov [rsi], al        ;
-
-    mov rax, 0x1 ; output %
-    mov rdi, 1   ;
-    mov rdx, 1   ;
-    syscall      ;
-
-    jmp .default
-
-.default:
-    add rsi, 1           ; changing the address of the beginning of the string
-    mov [rbp + r13], rsi ;
-
-    jmp .next_specifier
-    
-.no_one_specifier:
-    mov rsi, [rbp + r13] ; output of the part of the string in which there are no specifiers left
-    call my_strlen       ;
-    mov rdx, rcx         ;
-    mov rsi, [rbp + r13] ;
-    mov rdi, 1           ;
-    mov rax, 0x1         ;
-    syscall              ;
-
-    pop rbp ;  epilogue
-    ret     ;
-
-;------------------------------------------------
 ; Preparing the string for the my_printf function
 ;
 ; Entry:	RDI - the address of the beginning of the string
-; Exit:		R12 - the number * 8 of elements in the stack for the my_printf function
+; Exit:		R12 - the number * 8 of elements in the stack
+;                 for the my_printf function
 ; Note:     c - 0, s - 1, d - 2, b - 3, o - 4, x - 5, % - 6
 ; Destr:	RAX, RCX, RSI, RDI, R12
 ;------------------------------------------------
@@ -339,52 +206,196 @@ parser_string:
     ret
 
 ;------------------------------------------------
+; Printf the string on the screen
+;
+; Entry:	args in the stack
+;           (address of the string - required argument)
+; Exit:		none
+; Destr:	RAX, RCX, RDX, RSI, RDI, RBP, RSP, R10, R12, R14
+;------------------------------------------------
+
+%macro percent_num_out 1
+
+    mov rsi, NUM           ;
+    mov rax, [rbp + r12]   ; preparing arguments for itoa
+    sub r12, 8             ; (rsi, rax, rbx)
+    mov rbx, %1            ;
+    call my_itoa_no_binary ;
+
+    mov rsi, NUM   ; preparing arguments for my_strlen
+    call my_strlen ;
+
+    mov rax, 0x1 ; output of the NUM string
+    mov rdi, 1   ;
+    mov rsi, NUM ;
+    mov rdx, rcx ; (rdx = length of the string NUM)
+    syscall      ;
+
+    mov rsi, [rbp + 16] ; rsi = the address of the original line to output
+
+%endmacro
+
+my_printf:
+
+    push rbp     ; prolog
+	mov rbp, rsp ;
+
+    mov rdi, [rbp + 16] ; preparing a string
+    call parser_string  ;
+
+    cmp r12, 0            ; determining the correctness of a string
+    je .return_with_error ;
+
+    mov r10, 0 ; counter of successfully derived specifiers (except %%)
+
+.next_specifier:
+    mov rsi, [rbp + 16] ; search for the first character %
+    mov rax, "%"        ;
+    call my_strchr      ;
+
+    cmp rcx, 0           ; determining the presence of a symbol %
+    je .no_one_specifier ;
+
+    push rcx ; saving the register value before calling syscall
+
+    mov rax, 0x1        ;
+    mov rdi, 1          ; output of the string up to %
+    mov rsi, [rbp + 16] ;
+    mov rdx, rcx        ;
+    dec rdx             ;
+    syscall             ; (registers rcx and r11 will be destroyed)
+    
+    pop rcx ; restoring the register value
+    
+    add rsi, rcx        ; changing the address of the beginning of the string
+    mov [rbp + 16], rsi ;
+
+    mov al, [rsi] ; al = one of nimbers 0 ... 6
+    sub al, 0x30  ;
+
+    lea r14, [jump_table + rax * 8] ; interaction with the jump table
+    jmp [r14]                       ;
+
+..@percent_C_out:
+    mov rax, [rbp + r12] ; replacing the %c specifier with the character
+    sub r12, 8           ;
+    mov [rsi], al        ;
+
+    sub rsi, 1          ; changing the address of the beginning of the string
+    mov [rbp + 16], rsi ;
+
+    jmp .default
+
+..@percent_S_out:
+    mov rsi, [rbp + r12] ; output of the string that is marked with the %s specifier
+    call my_strlen       ;
+    mov rdx, rcx         ;
+    mov rsi, [rbp + r12] ;
+    sub r12, 8           ;
+    mov rdi, 1           ;
+    mov rax, 0x1         ;
+    syscall              ;
+
+    mov rsi, [rbp + 16] ; changing the address of the beginning of the string
+
+    jmp .default
+
+..@percent_D_out:
+    percent_num_out 10
+    jmp .default
+
+..@percent_B_out:
+    percent_num_out 2
+    jmp .default
+
+..@percent_O_out:
+    percent_num_out 8
+    jmp .default
+
+..@percent_X_out:
+    percent_num_out 16
+    jmp .default
+
+..@percent_P_out:
+    mov rsi, [rbp + 16] ; replacing the %c specifier with the character
+    mov rax, "%"        ;
+    mov [rsi], al       ;
+
+    mov rax, 0x1 ; output %
+    mov rdi, 1   ;
+    mov rdx, 1   ;
+    syscall      ;
+
+    sub r10, 1; decrease by one the number of successfully derived specifiers (except %%)
+
+    jmp .default
+
+.default:
+    add r10, 1 ; increase by one the number of successfully derived specifiers
+
+    add rsi, 1          ; changing the address of the beginning of the string
+    mov [rbp + 16], rsi ;
+
+    jmp .next_specifier
+    
+.no_one_specifier:
+    mov rsi, [rbp + 16] ; output of the part of the string in which there are no specifiers left
+    call my_strlen      ;
+    mov rdx, rcx        ;
+    mov rsi, [rbp + 16] ;
+    mov rdi, 1          ;
+    mov rax, 0x1        ;
+    syscall             ;
+
+    mov rax, 0  ; rax = 0 - the program ended without errors
+
+    pop rbp ; epilog
+
+    pop r12 ; saving the return address from the stack
+
+    add r10, 1   ; the original string has been successfully output
+
+    mov rcx, r10 ; clearing the stack after calling the my_printf function
+.lp:             ;
+    pop r10      ;
+    loop .lp     ;
+
+    push r12 ; exiting the function 
+    ret      ;
+
+.return_with_error:
+    mov rax, -1 ; rax = -1 - the program ended with errors
+
+    pop rbp ;  epilogue
+    ret     ;
+
+;------------------------------------------------
 ; main
 ;------------------------------------------------
 
-%macro percent_sym_or_num_in 1
+%macro percent_specifier_in 1
     mov r10, %1
     push r10
-%endmacro
-
-%macro percent_str_in 1
-    mov r10, STR%1
-    push r10
-    mov rsi, STR%1
-    call my_strlen
-    push rcx
-    add r12, 8
 %endmacro
 
 global _start
 
 _start:
 
-    mov rdi, MSG       ; preparing a string for the my_printf function
-    call parser_string ;
-    cmp r12, 0         ;
-    je .return
+    percent_specifier_in "H"
+    percent_specifier_in "W"
+    percent_specifier_in "L"
+    percent_specifier_in "!"
+    percent_specifier_in STR1
+    percent_specifier_in 10
+    percent_specifier_in 10
+    percent_specifier_in 10
+    percent_specifier_in 10
 
     mov rsi, MSG
     push rsi
-    percent_sym_or_num_in "H"
-    percent_sym_or_num_in "W"
-    percent_sym_or_num_in "L"
-    percent_sym_or_num_in "!"
-    percent_str_in 1
-    percent_sym_or_num_in 10
-    percent_sym_or_num_in 10
-    percent_sym_or_num_in 10
-    percent_sym_or_num_in 10
-    push r12
     call my_printf
-    mov rcx, r12 ; clearing the stack after calling the my_printf function
-.lp:             ;
-    pop r10      ;
-    sub rcx, 7   ;
-    loop .lp     ;
 
-.return:
     mov rax, 0x3C ; completion of the program
     xor rdi, rdi  ;
     syscall       ;
