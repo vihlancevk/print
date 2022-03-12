@@ -18,9 +18,11 @@ section .data
 ERROR: db "Wrong format input string!", 0x0a
 ERROR_LEN equ $ - ERROR
 
-MSG: db "%cello, %% %cor%cd%c %s", 0x0a, "$"
+MSG: db "%cello, %% %cor%cd%c %s %d %b %o %x", 0x0a, "$"
 
 STR1: db "My name is Kostya!$"
+
+NUM: db ""  ; buffer for itoa
 
 section .text
 
@@ -90,12 +92,83 @@ stop_chr:
 	ret
 
 ;------------------------------------------------
+; Converting a number to a string (the string must
+; end with the character $)
+;
+; Entry:	- RSI - addr of string for output answer
+;           - RAX - the number
+;           - RBX - the base of the number system
+;
+; Note:	    - $ - 24h (ASCII code)
+;       	- a number cannot start with 0
+;
+; Exit:		- addr of str
+; Destr:	RAX, RBX, RCX, RDX, RSI
+;------------------------------------------------
+
+itoa:
+    
+	mov rcx, 0
+next_itoa:
+	mov rdx, 0
+    div rbx
+    push rdx
+    inc rcx
+	cmp rax, 0
+	jne next_itoa
+	    	
+reverse_itoa:
+	cmp rcx, 0x0
+    je stop_itoa
+
+    pop rax
+    dec rcx
+    mov rbx, 0x0a
+    cmp rax, rbx
+    jl num
+
+    add rax, 07h
+                        
+num:
+	add rax, 30h
+    mov [rsi], rax
+    inc rsi
+    jmp reverse_itoa
+    
+    
+stop_itoa:
+	mov rbx, 0x24
+    mov [rsi], rbx
+    
+    ret
+
+;------------------------------------------------
 ; Print str on screen
 ;
 ; Entry:	args in the stack
 ; Exit:		None
 ; Destr:	RAX, RCX, RDX, RSI, RDI, RBP, RSP, R10, R14
 ;------------------------------------------------
+
+%macro percent_num_out 1
+
+    mov rsi, NUM
+    add rbp, r10
+    mov rax, [rbp]
+    sub rbp, r10
+    sub r10, 8
+    mov rbx, %1
+    call itoa
+    mov rsi, NUM
+    call strlen
+    mov rdx, rcx
+    mov rsi, NUM
+    mov rdi, 1
+    mov rax, 0x1
+    syscall
+    mov rsi, [rbp + r13]
+
+%endmacro
 
 print:
 
@@ -156,19 +229,19 @@ percent_S_out:
 
 
 percent_D_out:
-    ; ToDo
+    percent_num_out 10
     jmp _default_
 
 percent_B_out:
-    ; ToDo
+    percent_num_out 2
     jmp _default_
 
 percent_O_out:
-    ; ToDo
+    percent_num_out 8
     jmp _default_
 
 percent_X_out:
-    ; ToDo
+    percent_num_out 16
     jmp _default_
 
 percent_P_out:
@@ -268,12 +341,12 @@ no_one_specifier:
 ; main
 ;------------------------------------------------
 
-%macro percent_c_in 1
+%macro percent_sym_or_num_in 1
     mov r10, %1
     push r10
 %endmacro
 
-%macro percent_s_in 1
+%macro percent_str_in 1
     mov r10, STR%1
     push r10
     mov rsi, STR%1
@@ -281,7 +354,6 @@ no_one_specifier:
     push rcx
     add r12, 8
 %endmacro
-
 
 global _start
 
@@ -292,37 +364,26 @@ _start:
     cmp r12, 0
     je return
 
-    ; mov rsi, MSG
-    ; call strlen
-    ; mov rdx, rcx
-    ; mov rsi, MSG
-    ; mov rax, 0x1
-    ; mov rdi, 1
-    ; syscall
-
     mov rsi, MSG
     push rsi
-    percent_c_in "H"
-    percent_c_in "W"
-    percent_c_in "L"
-    percent_c_in "!"
-    percent_s_in 1
+    percent_sym_or_num_in "H"
+    percent_sym_or_num_in "W"
+    percent_sym_or_num_in "L"
+    percent_sym_or_num_in "!"
+    percent_str_in 1
+    percent_sym_or_num_in 10
+    percent_sym_or_num_in 10
+    percent_sym_or_num_in 10
+    percent_sym_or_num_in 10
     push r12
     call print
-    mov rcx, 5
+debug:    mov rcx, r12
 lp1:
-    pop r10    
+    pop r10
+    sub rcx, 7    
     loop lp1
-
-    ; mov r8, jump_table.L1
-    ; mov r9, jump_table.L2
-    ; mov r10, jump_table.L3
-    ; mov r11, jump_table.L4
-    ; mov r12, jump_table.L5
-    ; mov r13, jump_table.L6
-    ; mov r14, jump_table.L7
 
 return:
     mov rax, 0x3C
     xor rdi, rdi
-    syscall      
+    syscall
