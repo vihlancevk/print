@@ -1,14 +1,20 @@
 ; nasm -f elf64 -g -l print.lst print.asm
 ; ld -o print print.o
+; ./print
 
 section .data
 
-Msg: db "%cello, %cor%cd%c", 0x0a
+ERROR: db "Wrong format input string!", 0x0a
+ERROR_LEN equ $ - ERROR
+
+MSG: db "%cel%%lo, %cor%cd%c %%", 0x0a, "$"
+MSG_LEN equ $ - MSG
 
 section .text
 
 ;------------------------------------------------
-; String length counting function
+; String length counting function (the string must
+; end with the character $)
 ;
 ; Entry:	RSI - addr of the beginning of the string
 ; Note:		$ - 24h (ASCII code)
@@ -22,7 +28,7 @@ strlen:
 	mov rcx, 0      ; rcx - length of the string	
 
 next_strlen:
-    cmp [rsi], ah
+    cmp [rsi], al
     je stop_strlen
     
     inc rcx
@@ -35,7 +41,8 @@ stop_strlen:
 
 ;------------------------------------------------
 ; Search function for the first occurrence
-; of a character in a string
+; of a character in a string (the string must
+; end with the character $)
 ;
 ; Entry:	- RSI - addr of the beginning of the string
 ;           - RAX - the symbol to be found
@@ -87,12 +94,12 @@ print:
     mov r13, [rbp + 16]     ; r13 = r12
     add r13, 8
 
-next_specifier1:
+_next_specifier_:
     mov rsi, [rbp + r13]
     mov rax, "%"
     call strchr
     cmp rcx, 0
-    je no_specifier1
+    je _no_one_specifier_
 
     push rcx
     mov rax, 0x1
@@ -106,14 +113,11 @@ next_specifier1:
     mov [rbp + r13], rsi
     mov al, [rsi]
     sub al, 0x30
-    cmp al, 6
-    ja no_c_specifier1
-
-    cmp al, 0
-    jb no_c_specifier1
 
     lea r14, [jump_table + rax * 8]
     jmp r14
+
+align 8
 
 jump_table:
     jmp percent_C_out ; %c - 0
@@ -132,22 +136,40 @@ percent_C_out:
     mov [rsi], al
     sub rsi, 1
     mov [rbp + r13], rsi
-    jmp no_one_specifier1
+    jmp _default_
 
 percent_S_out:
-percent_D_out:
-percent_B_out:
-percent_O_out:
-percent_X_out:
-percent_P_out:
+    
 
-no_c_specifier1:
-no_one_specifier1:
+percent_D_out:
+
+
+percent_B_out:
+
+
+percent_O_out:
+
+    
+percent_X_out:
+    ; ToDo
+    jmp _default_
+
+percent_P_out:
+    mov rsi, [rbp + r13]
+    mov rax, "%"
+    mov [rsi], al
+    mov rax, 0x1
+    mov rdi, 1
+    mov rdx, 1
+    syscall
+    jmp _default_
+
+_default_:
     add rsi, 1
     mov [rbp + r13], rsi
-    jmp next_specifier1
+    jmp _next_specifier_
     
-no_specifier1:
+_no_one_specifier_:
     mov rsi, [rbp + r13]
     call strlen
     mov rdx, rcx
@@ -157,7 +179,6 @@ no_specifier1:
     syscall
 
     pop rbp
-
     ret
 
 ;------------------------------------------------
@@ -176,7 +197,7 @@ no_specifier1:
 
     mov rax, %3
     mov [rdi], al
-    jmp no_one_specifier
+    jmp no_specifier
 
 no_%1_specifier:
 %endmacro
@@ -190,7 +211,7 @@ next_specifier:
     mov rax, "%"
     call strchr
     cmp rcx, 0
-    je no_specifier
+    je no_one_specifier
 
     add rdi, rcx
     add r12, 8
@@ -202,19 +223,27 @@ next_specifier:
     check_sym x, "x", "5"
     mov rax, "%"        ; check_sym %, "%", 6
     cmp [rdi], al
-    jne no_percent_specifier
+    jne wrong_specifier
 
     mov rax, "6"
     mov [rdi], al
     sub r12, 8
-    jmp no_one_specifier
+    jmp no_specifier
 
-no_percent_specifier:
-no_one_specifier:
+wrong_specifier:
+    mov rax, 0x1
+    mov rdi, 1
+    mov rsi, ERROR
+    mov rdx, ERROR_LEN
+    syscall
+    xor r12, r12
+    ret
+
+no_specifier:
     add rdi, 1
     jmp next_specifier
 
-no_specifier:
+no_one_specifier:
     add r12, 16
     ret
 
@@ -231,16 +260,20 @@ global _start
 
 _start:
 
-    mov rdi, Msg
+    mov rdi, MSG
     call parser_string
+    cmp r12, 0
+    je return
 
+    ; mov rsi, MSG
+    ; call strlen
+    ; mov rdx, rcx
+    ; mov rsi, MSG
     ; mov rax, 0x1
     ; mov rdi, 1
-    ; mov rsi, Msg
-    ; mov rdx, 18
     ; syscall
 
-    mov rsi, Msg
+    mov rsi, MSG
     push rsi
     percent_c_in "H"
     percent_c_in "W"
@@ -253,6 +286,7 @@ lp1:
     pop r10    
     loop lp1
 
+return:
     mov rax, 0x3C
     xor rdi, rdi
     syscall      
