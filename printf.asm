@@ -92,6 +92,84 @@ my_strchr:
 ; Entry:	- RSI - the address of string for output answer
 ;           - RAX - the number
 ;           - RBX - the base of the number system
+;                   (numbers that are a power of two)
+;
+; Note:	    - $ - 24h (ASCII code)
+;       	- the number cannot start with 0
+;
+; Exit:		- the address of str
+; Destr:	RAX, RBX, RCX, RDX, RSI, R11, R15
+;------------------------------------------------
+
+my_itoa_binary:
+
+    mov rcx, 0 ; degree of two of the base of the number system
+.check_next_bit:
+    shr rbx, 1
+
+    jc .stop_check_bit
+
+    inc rcx
+    jmp .check_next_bit
+
+.stop_check_bit:
+
+	mov rdx, 0 ; number of digits in the number
+.next_itoa:
+    mov r11, 0 ; r11 - the register in which the digit will be written
+    mov rbx, 1 ; bit multiplier
+
+    mov r15, rcx ; save value rcx
+
+.lp:
+	shr rax, 1 ; dividing the rax register by 2
+    jnc .cf_0  ; comparing the last bit of the rax number before dividing by 2 with 0
+
+    add r11, rbx
+
+.cf_0:
+    shl rbx, 1 ; multiplying the rbx register by 2
+    loop .lp
+
+    push r11 ; 
+
+    mov rcx, r15
+
+    inc rdx
+	cmp rax, 0
+	jne .next_itoa
+	    	
+.reverse_itoa:
+	cmp rdx, 0x0
+    je .stop_itoa
+
+    pop rax
+    dec rdx
+    mov rbx, 0x0a
+    cmp rax, rbx
+    jl .num
+
+    add rax, 07h
+                        
+.num:
+	add rax, 30h
+    mov [rsi], rax
+    inc rsi
+    jmp .reverse_itoa
+    
+.stop_itoa:
+	mov rbx, 0x24
+    mov [rsi], rbx
+    
+    ret
+
+;------------------------------------------------
+; Converting the number to the string (the string must
+; end with the character $)
+;
+; Entry:	- RSI - the address of string for output answer
+;           - RAX - the number
+;           - RBX - the base of the number system
 ;                   (numbers that are not a power of two)
 ;
 ; Note:	    - $ - 24h (ASCII code)
@@ -214,7 +292,28 @@ parser_string:
 ; Destr:	RAX, RCX, RDX, RSI, RDI, RBP, RSP, R10, R12, R14
 ;------------------------------------------------
 
-%macro percent_num_out 1
+%macro percent_num_binary_out 1
+
+    mov rsi, NUM         ;
+    mov rax, [rbp + r12] ; preparing arguments for itoa
+    sub r12, 8           ; (rsi, rax, rbx)
+    mov rbx, %1          ;
+    call my_itoa_binary  ;
+
+    mov rsi, NUM   ; preparing arguments for my_strlen
+    call my_strlen ;
+
+    mov rax, 0x1 ; output of the NUM string
+    mov rdi, 1   ;
+    mov rsi, NUM ;
+    mov rdx, rcx ; (rdx = length of the string NUM)
+    syscall      ;
+
+    mov rsi, [rbp + 16] ; rsi = the address of the original line to output
+
+%endmacro
+
+%macro percent_num_no_binary_out 1
 
     mov rsi, NUM           ;
     mov rax, [rbp + r12]   ; preparing arguments for itoa
@@ -301,19 +400,19 @@ my_printf:
     jmp .default
 
 ..@percent_D_out:
-    percent_num_out 10
+    percent_num_no_binary_out 10
     jmp .default
 
 ..@percent_B_out:
-    percent_num_out 2
+    percent_num_binary_out 2
     jmp .default
 
 ..@percent_O_out:
-    percent_num_out 8
+    percent_num_binary_out 8
     jmp .default
 
 ..@percent_X_out:
-    percent_num_out 16
+    percent_num_binary_out 16
     jmp .default
 
 ..@percent_P_out:
@@ -349,7 +448,7 @@ my_printf:
 
     mov rax, 0  ; rax = 0 - the program ended without errors
 
-    pop rbp ; epilog
+    pop rbp ; epilogue
 
     pop r12 ; saving the return address from the stack
 
@@ -387,10 +486,10 @@ _start:
     percent_specifier_in "L"
     percent_specifier_in "!"
     percent_specifier_in STR1
+    percent_specifier_in 0
     percent_specifier_in 10
     percent_specifier_in 10
-    percent_specifier_in 10
-    percent_specifier_in 10
+    percent_specifier_in 389
 
     mov rsi, MSG
     push rsi
