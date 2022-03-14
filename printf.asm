@@ -442,7 +442,7 @@ my_printf:
     mov rax, 0x1        ;
     syscall             ;
 
-    mov rax, 0  ; rax = 0 - the program ended without errors
+    mov rax, 0  ; rax = 0 - the function ended without errors
 
     pop rbp ; epilogue
 
@@ -459,7 +459,7 @@ my_printf:
     ret      ;
 
 .return_with_error:
-    mov rax, -1 ; rax = -1 - the program ended with errors
+    mov rax, -1 ; rax = -1 - the function ended with errors
 
     pop rbp ;  epilogue
     ret     ;
