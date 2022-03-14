@@ -1,6 +1,6 @@
 # printf
 The function outputs a message with specifiers.  
-Entry:  - message with specifiers (required parameter):
+Entry:  - message with specifiers (required parameter):  
           1) *%c* - outputs a character;
           2) *%s* - outputs a string;
           3) *%d* - outputs a decimal representation of a number;
