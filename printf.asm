@@ -234,7 +234,7 @@ my_itoa_no_binary:
 
 parser_string:
 
-    xor r12, r12
+    mov r12, 1
 
 .next_specifier:
     mov rsi, rdi
@@ -244,7 +244,6 @@ parser_string:
     je .no_one_specifier
 
     add rdi, rcx
-    add r12, 8
     check_sym c, "c", "0"
     check_sym s, "s", "1"
     check_sym d, "d", "2"
@@ -258,7 +257,6 @@ parser_string:
 
     mov rax, "6"
     mov [rdi], al
-    sub r12, 8
     jmp .no_specifier
 
 .wrong_specifier:
@@ -276,7 +274,6 @@ parser_string:
     jmp .next_specifier
 
 .no_one_specifier:
-    add r12, 16
     ret
 
 ;------------------------------------------------
@@ -290,9 +287,9 @@ parser_string:
 
 %macro percent_num_binary_out 1
 
-    mov rsi, NUM         ;
-    mov rax, [rbp + r12] ; preparing arguments for itoa
-    sub r12, 8           ; (rsi, rax, rbx)
+    mov rsi, NUM         ; preparing arguments for itoa (rsi, rax, rbx)
+    mov rax, [rbp + r12] ;
+    add r12, 8           ;
     mov rbx, %1          ;
     call my_itoa_binary  ;
 
@@ -311,9 +308,9 @@ parser_string:
 
 %macro percent_num_no_binary_out 1
 
-    mov rsi, NUM           ;
-    mov rax, [rbp + r12]   ; preparing arguments for itoa
-    sub r12, 8             ; (rsi, rax, rbx)
+    mov rsi, NUM           ; preparing arguments for itoa (rsi, rax, rbx)
+    mov rax, [rbp + r12]   ;
+    add r12, 8             ;
     mov rbx, %1            ;
     call my_itoa_no_binary ;
 
@@ -342,6 +339,7 @@ my_printf:
     je .return_with_error ;
 
     mov r10, 0 ; counter of successfully derived specifiers (except %%)
+    mov r12, 24 ; offset of parameters in the stack
 
 .next_specifier:
     mov rsi, [rbp + 16] ; search for the first character %
@@ -373,7 +371,7 @@ my_printf:
 
 ..@percent_C_out:
     mov rax, [rbp + r12] ; replacing the %c specifier with the character
-    sub r12, 8           ;
+    add r12, 8           ;
     mov [rsi], al        ;
 
     sub rsi, 1          ; changing the address of the beginning of the string
@@ -386,7 +384,7 @@ my_printf:
     call my_strlen       ;
     mov rdx, rcx         ;
     mov rsi, [rbp + r12] ;
-    sub r12, 8           ;
+    add r12, 8           ;
     mov rdi, 1           ;
     mov rax, 0x1         ;
     syscall              ;
@@ -442,18 +440,18 @@ my_printf:
     mov rax, 0x1        ;
     syscall             ;
 
-    mov rax, 0  ; rax = 0 - the function ended without errors
+    mov rax, r10  ; rax = 0 - the function ended without errors
 
     pop rbp ; epilogue
 
     pop r12 ; saving the return address from the stack
 
-    add r10, 1   ; the original string has been successfully output
+;     add r10, 1   ; the original string has been successfully output
 
-    mov rcx, r10 ; clearing the stack after calling the my_printf function
-.lp:             ;
-    pop r10      ;
-    loop .lp     ;
+;     mov rcx, r10 ; clearing the stack after calling the my_printf function
+; .lp:             ;
+;     pop r10      ;
+;     loop .lp     ;
 
     push r12 ; exiting the function 
     ret      ;

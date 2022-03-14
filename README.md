@@ -11,9 +11,11 @@ The function outputs a message with specifiers.
 7) *%%* - outputs a percentage.  
 - other parameters that are optional  
 ## Note:
-first, the optional parameters must be passed to the function, and then the mandatory parameter  
+- parameters are passed through the stack from right to left  
+- the program does not clear the stack of arguments after its completion  
+- if the number of specifiers (except %) in the message is less than the number of optional parameters then the behavior of the function is undefined  
 ## Exit:
 the results of the function are transmitted via the RAX register  
-- RAX = 0  - the function ended without errors  
+- RAX = the number of parameters recorded in the message  - the function ended without errors  
 - RAX = -1 - the function ended with errors
 
