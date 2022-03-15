@@ -17,17 +17,17 @@ global _start
 
 _start:
 
+    mov rdi, MSG
+    mov rsi, "H"
+    mov rdx, "W"
+    mov rcx, "L"
+    mov r8, "!"
+    mov r9, STR1
     percent_specifier_in 389
     percent_specifier_in 10
     percent_specifier_in 10
     percent_specifier_in 0
-    percent_specifier_in STR1
-    percent_specifier_in "!"
-    percent_specifier_in "L"
-    percent_specifier_in "W"
-    percent_specifier_in "H"
-    percent_specifier_in MSG
-    call my_printf
+    call my_printf_stdcall
 
     mov rax, 0x3C ; completion of the program
     xor rdi, rdi  ;

@@ -1,18 +1,25 @@
 section .rodata align = 8
 
-jump_table: 
-    dq ..@percent_C_out ; %c - 0
-    dq ..@percent_S_out ; %s - 1
-    dq ..@percent_D_out ; %d - 2
-    dq ..@percent_B_out ; %b - 3
-    dq ..@percent_O_out ; %o - 4
-    dq ..@percent_X_out ; %x - 5
-    dq ..@percent_P_out ; %% - 6
+jump_table:
+    times 37 dq ..@return_with_error
+    dq ..@percent_P_out ; %% - 37
+    times 60 dq ..@return_with_error
+    dq ..@percent_B_out ; %b - 98
+    dq ..@percent_C_out ; %c - 99
+    dq ..@percent_D_out ; %d - 100
+    times 10 dq ..@return_with_error
+    dq ..@percent_O_out ; %o - 111
+    times 03 dq ..@return_with_error
+    dq ..@percent_S_out ; %s - 115
+    times 04 dq ..@return_with_error
+    dq ..@percent_X_out ; %x - 120
 
 section .data
 
-ERROR: db "Wrong format input string!", 0x0a ; messages warning the user about an error in the program
-ERROR_LEN equ $ - ERROR                      ; the length of this message
+ERROR: db 0x0a, "Wrong format input string!", 0x0a ; messages warning the user about an error in the program
+ERROR_LEN equ $ - ERROR ; the length of this message
+
+BUFFER_FOR_SYMBOL: db " "
 
 NUM: db "" ; buffer for itoa
 
@@ -211,72 +218,6 @@ my_itoa_no_binary:
     ret
 
 ;------------------------------------------------
-; Preparing the string for the my_printf function
-;
-; Entry:	RDI - the address of the beginning of the string
-; Exit:		R12 - the number * 8 of elements in the stack
-;                 for the my_printf function
-; Note:     c - 0, s - 1, d - 2, b - 3, o - 4, x - 5, % - 6
-; Destr:	RAX, RCX, RSI, RDI, R12
-;------------------------------------------------
-
-%macro check_sym 3 
-    mov rax, %2
-    cmp [rdi], al
-    jne .no_%1_specifier
-
-    mov rax, %3
-    mov [rdi], al
-    jmp .no_specifier
-
-.no_%1_specifier:
-%endmacro
-
-parser_string:
-
-    mov r12, 1
-
-.next_specifier:
-    mov rsi, rdi
-    mov rax, "%"
-    call my_strchr
-    cmp rcx, 0
-    je .no_one_specifier
-
-    add rdi, rcx
-    check_sym c, "c", "0"
-    check_sym s, "s", "1"
-    check_sym d, "d", "2"
-    check_sym b, "b", "3"
-    check_sym o, "o", "4"
-    check_sym x, "x", "5"
-
-    mov rax, "%"        ; check_sym %, "%", 6
-    cmp [rdi], al
-    jne .wrong_specifier
-
-    mov rax, "6"
-    mov [rdi], al
-    jmp .no_specifier
-
-.wrong_specifier:
-    mov rax, 0x1       ; error message output
-    mov rdi, 1         ;
-    mov rsi, ERROR     ;
-    mov rdx, ERROR_LEN ;
-    syscall            ;
-
-    xor r12, r12
-    ret
-
-.no_specifier:
-    add rdi, 1
-    jmp .next_specifier
-
-.no_one_specifier:
-    ret
-
-;------------------------------------------------
 ; Printf the string on the screen
 ;
 ; Entry:	args in the stack
@@ -302,7 +243,7 @@ parser_string:
     mov rdx, rcx ; (rdx = length of the string NUM)
     syscall      ;
 
-    mov rsi, [rbp + 16] ; rsi = the address of the original line to output
+    mov rsi, [rbp + 24] ; rsi = the address of the original line to output
 
 %endmacro
 
@@ -323,7 +264,7 @@ parser_string:
     mov rdx, rcx ; (rdx = length of the string NUM)
     syscall      ;
 
-    mov rsi, [rbp + 16] ; rsi = the address of the original line to output
+    mov rsi, [rbp + 24] ; rsi = the address of the original line to output
 
 %endmacro
 
@@ -332,17 +273,11 @@ my_printf:
     push rbp     ; prolog
 	mov rbp, rsp ;
 
-    mov rdi, [rbp + 16] ; preparing a string
-    call parser_string  ;
-
-    cmp r12, 0            ; determining the correctness of a string
-    je .return_with_error ;
-
     mov r10, 0 ; counter of successfully derived specifiers (except %%)
-    mov r12, 24 ; offset of parameters in the stack
+    mov r12, 32 ; offset of parameters in the stack
 
 .next_specifier:
-    mov rsi, [rbp + 16] ; search for the first character %
+    mov rsi, [rbp + 24] ; search for the first character %
     mov rax, "%"        ;
     call my_strchr      ;
 
@@ -353,29 +288,34 @@ my_printf:
 
     mov rax, 0x1        ;
     mov rdi, 1          ; output of the string up to %
-    mov rsi, [rbp + 16] ;
+    mov rsi, [rbp + 24] ;
     mov rdx, rcx        ;
     dec rdx             ;
     syscall             ; (registers rcx and r11 will be destroyed)
     
     pop rcx ; restoring the register value
-    
+   
     add rsi, rcx        ; changing the address of the beginning of the string
-    mov [rbp + 16], rsi ;
+    mov [rbp + 24], rsi ;
 
-    mov al, [rsi] ; al = one of nimbers 0 ... 6
-    sub al, 0x30  ;
+    mov al, [rsi] ; al = "%" ... "x"
 
     lea r14, [jump_table + rax * 8] ; interaction with the jump table
     jmp [r14]                       ;
 
 ..@percent_C_out:
-    mov rax, [rbp + r12] ; replacing the %c specifier with the character
+    mov rax, [rbp + r12] ; replacing the %c specifier with the symbol
     add r12, 8           ;
-    mov [rsi], al        ;
+    mov rdx, rax         ;
 
-    sub rsi, 1          ; changing the address of the beginning of the string
-    mov [rbp + 16], rsi ;
+    mov rax, 0x1               ; output of the symbol
+    mov rdi, 1                 ;
+    mov rsi, BUFFER_FOR_SYMBOL ;
+    mov [rsi], dl              ;
+    mov rdx, 1                 ;
+    syscall                    ;
+
+    mov rsi, [rbp + 24]
 
     jmp .default
 
@@ -389,7 +329,7 @@ my_printf:
     mov rax, 0x1         ;
     syscall              ;
 
-    mov rsi, [rbp + 16] ; changing the address of the beginning of the string
+    mov rsi, [rbp + 24] ; changing the address of the beginning of the string
 
     jmp .default
 
@@ -410,16 +350,15 @@ my_printf:
     jmp .default
 
 ..@percent_P_out:
-    mov rsi, [rbp + 16] ; replacing the %c specifier with the character
-    mov rax, "%"        ;
-    mov [rsi], al       ;
+    mov rax, 0x1               ; output %
+    mov rdi, 1                 ;
+    mov rsi, BUFFER_FOR_SYMBOL ;
+    mov rdx, "%"               ;
+    mov [rsi], dl              ;
+    mov rdx, 1                 ;
+    syscall                    ;
 
-    mov rax, 0x1 ; output %
-    mov rdi, 1   ;
-    mov rdx, 1   ;
-    syscall      ;
-
-    sub r10, 1; decrease by one the number of successfully derived specifiers (except %%)
+    mov rsi, [rbp + 24]
 
     jmp .default
 
@@ -427,15 +366,15 @@ my_printf:
     add r10, 1 ; increase by one the number of successfully derived specifiers
 
     add rsi, 1          ; changing the address of the beginning of the string
-    mov [rbp + 16], rsi ;
+    mov [rbp + 24], rsi ;
 
     jmp .next_specifier
     
 .no_one_specifier:
-    mov rsi, [rbp + 16] ; output of the part of the string in which there are no specifiers left
+    mov rsi, [rbp + 24] ; output of the part of the string in which there are no specifiers left
     call my_strlen      ;
     mov rdx, rcx        ;
-    mov rsi, [rbp + 16] ;
+    mov rsi, [rbp + 24] ;
     mov rdi, 1          ;
     mov rax, 0x1        ;
     syscall             ;
@@ -443,22 +382,40 @@ my_printf:
     mov rax, r10  ; rax = 0 - the function ended without errors
 
     pop rbp ; epilogue
+    ret
 
-    pop r12 ; saving the return address from the stack
+..@return_with_error:
 
-;     add r10, 1   ; the original string has been successfully output
+    mov rax, 0x1       ; output error messange
+    mov rdi, 1         ;
+    mov rsi, ERROR     ;
+    mov rdx, ERROR_LEN ;
+    syscall            ;
 
-;     mov rcx, r10 ; clearing the stack after calling the my_printf function
-; .lp:             ;
-;     pop r10      ;
-;     loop .lp     ;
-
-    push r12 ; exiting the function 
-    ret      ;
-
-.return_with_error:
     mov rax, -1 ; rax = -1 - the function ended with errors
 
     pop rbp ;  epilogue
     ret     ;
+
+my_printf_stdcall:
+
+    pop r10
+
+    push r9
+    push r8
+    push rcx
+    push rdx
+    push rsi
+    push rdi
+
+    push r10
+
+    call my_printf
+
+    pop r10
+
+    add rsp, 6 * 8
+
+    push r10
     
+    ret  
